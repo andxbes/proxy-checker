@@ -17,11 +17,27 @@ function parseArgs(argv) {
   const command = args[0];
   /** @type {string[]} */
   const sources = [];
-  /** @type {{ command?: string, country?: string, check?: string, timeout: number, concurrency: number, sources: string[], help: boolean }} */
+  /** @type {string[]} */
+  const inputs = [];
+  /** @type {{
+   *   command?: string,
+   *   country?: string,
+   *   check?: string,
+   *   timeout: number,
+   *   concurrency: number,
+   *   sources: string[],
+   *   inputs: string[],
+   *   from: 'all' | 'proxies' | 'custom',
+   *   anonymity?: import('./types.js').Anonymity,
+   *   protocol?: import('./types.js').Protocol,
+   *   help: boolean,
+   * }} */
   const opts = {
     timeout: 10_000,
     concurrency: 50,
     sources,
+    inputs,
+    from: 'all',
     help: false,
   };
 
@@ -50,6 +66,29 @@ function parseArgs(argv) {
     } else if (arg === '--source' && next) {
       sources.push(next);
       i += 1;
+    } else if ((arg === '--input' || arg === '-i') && next) {
+      inputs.push(next);
+      i += 1;
+    } else if (arg === '--from' && next) {
+      if (!['all', 'proxies', 'custom'].includes(next)) {
+        throw new Error('--from must be all | proxies | custom');
+      }
+      opts.from = /** @type {'all' | 'proxies' | 'custom'} */ (next);
+      i += 1;
+    } else if (arg === '--protocol' && next) {
+      const protocol = next.toLowerCase();
+      if (!['http', 'https', 'socks4', 'socks5'].includes(protocol)) {
+        throw new Error('--protocol must be http | https | socks4 | socks5');
+      }
+      opts.protocol = /** @type {import('./types.js').Protocol} */ (protocol);
+      i += 1;
+    } else if (arg === '--anonymity' && next) {
+      const anonymity = next.toLowerCase();
+      if (!['anonymous', 'elite'].includes(anonymity)) {
+        throw new Error('--anonymity must be anonymous | elite');
+      }
+      opts.anonymity = /** @type {import('./types.js').Anonymity} */ (anonymity);
+      i += 1;
     } else if (arg === '--timeout' && next) {
       opts.timeout = Number(next);
       i += 1;
@@ -77,28 +116,38 @@ function printHelp() {
 
 Usage:
   npm start -- collect [--country IT] [--source spys-me]
-  npm start -- check --check https://example.com [--country IT] [--timeout 10000] [--concurrency 50]
-  npm start -- run --check https://example.com [--country IT] [--source spys-me]
+  npm start -- check --check https://example.com [--country IT] [--from custom]
+  npm start -- check --check https://example.com --input ./my-list.txt --protocol http
+  npm start -- run --check https://example.com [--country IT]
 
 Commands:
-  collect   Fetch proxies from registered sources and save under data/proxies/
-  check     Test saved proxies against a target URL (keep HTTP 200 only)
+  collect   Fetch proxies → data/proxies/ (does NOT touch data/custom/)
+  check     Test proxies against a target URL (keep HTTP 200 only)
   run       collect, then check
 
+Your own lists (never overwritten by collect):
+  data/custom/{CC}/{anonymity}-{protocol}.txt
+  Example: data/custom/IT/elite-http.txt
+
 Options:
-  --country CC       ISO country code (e.g. IT). Omit to use all countries.
+  --country CC       ISO country code (e.g. IT). Omit = all countries.
   --check URL        Target URL for checking (required for check/run)
   --target URL       Alias for --check
-  --source ID        Source parser id (repeatable). Default: all registered.
-  --timeout MS       Per-proxy request timeout (default: 10000)
+  --from SOURCE      Check lists from: all (default) | proxies | custom
+  --input PATH       Extra file or directory to check (repeatable)
+  --protocol TYPE    For plain --input files: http|https|socks4|socks5 (default http)
+  --anonymity TYPE   For plain --input files: anonymous|elite (default elite)
+  --source ID        Source parser id for collect (repeatable)
+  --timeout MS       Hard per-proxy deadline (default: 10000)
   --concurrency N    Parallel checks (default: 50)
   -h, --help         Show this help
 
 Registered sources: ${sources}
 
-Output layout:
-  data/proxies/{CC}/{anonymity}-{protocol}.txt
-  data/checked/{url-slug}/{anonymity}-{protocol}.txt
+Layout:
+  data/proxies/{CC}/...   collected (rewritten by collect)
+  data/custom/{CC}/...    your lists (safe)
+  data/checked/{slug}/... working proxies after check
 `);
 }
 
@@ -117,7 +166,7 @@ async function main() {
     return;
   }
 
-  const { proxiesDir, checkedDir } = dataPaths(projectRoot);
+  const { proxiesDir, customDir, checkedDir } = dataPaths(projectRoot);
 
   try {
     if (opts.command === 'collect' || opts.command === 'run') {
@@ -131,6 +180,7 @@ async function main() {
           `across ${stats.countries} countries (${stats.sources.join(', ')})`,
       );
       console.log(`  → ${proxiesDir}`);
+      console.log(`  (your lists stay in ${customDir})`);
     }
 
     if (opts.command === 'check' || opts.command === 'run') {
@@ -144,6 +194,10 @@ async function main() {
         country: opts.country,
         timeout: opts.timeout,
         concurrency: opts.concurrency,
+        from: opts.from,
+        inputs: opts.inputs,
+        anonymity: opts.anonymity,
+        protocol: opts.protocol,
       });
 
       console.log(

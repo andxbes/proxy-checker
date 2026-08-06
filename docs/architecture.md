@@ -4,9 +4,16 @@
 
 1. **Collect** — each registered source parser fetches and normalizes proxies into `ProxyRecord[]`.
 2. **Merge** — collector deduplicates (`protocol|host:port`), prefers `elite` on anonymity conflicts, optional `--country` filter.
-3. **Store** — write `data/proxies/{CC}/{anonymity}-{protocol}.txt`.
-4. **Check** (optional) — request the target URL through each proxy (follow redirects up to 5 hops); keep only **final** status **200**.
+3. **Store** — write `data/proxies/{CC}/{anonymity}-{protocol}.txt` (never writes `data/custom/`).
+4. **Check** (optional) — load `data/proxies/` + `data/custom/` (or `--from` / `--input`), request target through each proxy (follow redirects up to 5 hops); keep only **final** status **200**.
 5. **Store checked** — write `data/checked/{url-slug}/{anonymity}-{protocol}.txt`.
+
+## Custom lists
+
+- Path: `data/custom/{CC}/{anonymity}-{protocol}.txt`
+- `collect` does not touch this directory
+- `--from custom` checks only user lists
+- `--input path` adds an arbitrary file/dir for one run
 
 ## ProxyRecord
 

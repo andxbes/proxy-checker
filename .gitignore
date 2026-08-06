@@ -1,5 +1,8 @@
 node_modules/
 data/proxies/
 data/checked/
+data/custom/**
+!data/custom/README.md
+!data/custom/.gitkeep
 *.log
 .DS_Store

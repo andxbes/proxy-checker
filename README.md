@@ -27,6 +27,27 @@ npm start -- check --check https://example.com --country IT
 npm start -- run --check https://httpbin.org/status/200 --country IT --concurrency 30 --timeout 8000
 ```
 
+## Your own proxy lists
+
+`collect` rewrites only `data/proxies/`. Put your lists in **`data/custom/`** — they are never overwritten.
+
+```
+data/custom/IT/elite-http.txt
+data/custom/IT/elite-socks5.txt
+```
+
+```bash
+# check only your lists
+npm start -- check --check https://example.com --from custom
+
+# or any external file
+npm start -- check --check https://example.com --input ./my-list.txt --protocol socks5
+```
+
+Default `check` / `run` loads **both** `data/proxies/` and `data/custom/`.
+
+See [data/custom/README.md](data/custom/README.md).
+
 ## Commands
 
 | Command | Description |
@@ -43,15 +64,24 @@ npm start -- run --check https://httpbin.org/status/200 --country IT --concurren
 | `--check URL` / `--target URL` | Target URL for checking (required for `check` / `run`) |
 | `--source ID` | Parser id (repeatable). Default = all registered sources |
 | `--timeout MS` | Hard per-proxy deadline in ms (default `10000`). Dead proxies are cut off; total time ≈ batches × timeout, not N × timeout |
-| `--concurrency N` | How many proxies are checked **in parallel** (default `50`). Progress lines are only a log cadence (every N completed), not the thread count |
+| `--from SOURCE` | `all` (default) \| `proxies` \| `custom` — which built-in dirs to load for check |
+| `--input PATH` | Extra file or directory of proxies (repeatable). Plain files default to `elite` + `http` unless named `anonymity-protocol.txt` |
+| `--protocol TYPE` | Override protocol for plain `--input` files |
+| `--anonymity TYPE` | Override anonymity for plain `--input` files |
 | `-h`, `--help` | Help |
 
 ## Output layout
 
-Collected:
+Collected (rewritten by `collect`):
 
 ```
 data/proxies/{CC}/{anonymity}-{protocol}.txt
+```
+
+Your lists (safe from `collect`):
+
+```
+data/custom/{CC}/{anonymity}-{protocol}.txt
 ```
 
 Examples:

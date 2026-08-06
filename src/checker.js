@@ -4,7 +4,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import {
   dataPaths,
-  loadProxyLists,
+  loadProxiesForCheck,
   urlToSlug,
   writeCheckedLists,
 } from './storage.js';
@@ -200,6 +200,10 @@ async function mapPool(items, concurrency, worker) {
  * @param {string} [options.country]
  * @param {number} [options.timeout]
  * @param {number} [options.concurrency]
+ * @param {'all' | 'proxies' | 'custom'} [options.from]
+ * @param {string[]} [options.inputs]
+ * @param {import('./types.js').Anonymity} [options.anonymity]
+ * @param {import('./types.js').Protocol} [options.protocol]
  * @param {import('./types.js').ProxyRecord[]} [options.records]
  * @returns {Promise<{
  *   working: import('./types.js').ProxyRecord[],
@@ -210,15 +214,22 @@ async function mapPool(items, concurrency, worker) {
 export async function checkProxies(options) {
   const timeout = options.timeout ?? 10_000;
   const concurrency = options.concurrency ?? 50;
-  const { proxiesDir, checkedDir } = dataPaths(options.projectRoot);
+  const { checkedDir } = dataPaths(options.projectRoot);
 
   const records =
     options.records ??
-    (await loadProxyLists(proxiesDir, { country: options.country }));
+    (await loadProxiesForCheck({
+      projectRoot: options.projectRoot,
+      country: options.country,
+      from: options.from,
+      inputs: options.inputs,
+      anonymity: options.anonymity,
+      protocol: options.protocol,
+    }));
 
   if (records.length === 0) {
     throw new Error(
-      'No proxies to check. Run collect first or pass a country that has lists.',
+      'No proxies to check. Put lists in data/custom/, run collect, or pass --input <file|dir>.',
     );
   }
 
