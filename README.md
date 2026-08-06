@@ -98,10 +98,11 @@ Each file: one `ip:port` per line.
 Checked (only HTTP 200):
 
 ```
-data/checked/{url-slug}/{anonymity}-{protocol}.txt
+data/checked/{url-slug}/{CC}/{anonymity}-{protocol}.txt
 ```
 
 Example slug: `https://example.com/api` → `https_example_com_api`.
+Example path: `data/checked/https_example_com/IT/elite-http.txt`.
 
 ## Sources (v1)
 

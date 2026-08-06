@@ -147,7 +147,7 @@ Registered sources: ${sources}
 Layout:
   data/proxies/{CC}/...   collected (rewritten by collect)
   data/custom/{CC}/...    your lists (safe)
-  data/checked/{slug}/... working proxies after check
+  data/checked/{slug}/{CC}/... working proxies after check
 `);
 }
 
@@ -201,7 +201,8 @@ async function main() {
       });
 
       console.log(
-        `Working proxies: ${stats.working}/${stats.total} → ${stats.files} files`,
+        `Working proxies: ${stats.working}/${stats.total} → ${stats.files} files ` +
+          `across ${stats.countries} countries`,
       );
       console.log(`  → ${path.join(checkedDir, slug)}`);
     }

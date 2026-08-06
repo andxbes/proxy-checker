@@ -62,10 +62,7 @@ function checkOne(targetUrl, record, timeoutMs) {
     /** @type {import('node:http').Agent | undefined} */
     let agent;
 
-    const finish = (ok) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(hardTimer);
+    const destroyRequest = () => {
       try {
         req?.destroy();
       } catch {
@@ -77,6 +74,14 @@ function checkOne(targetUrl, record, timeoutMs) {
       } catch {
         /* ignore */
       }
+      req = undefined;
+    };
+
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardTimer);
+      destroyRequest();
       try {
         agent?.destroy?.();
       } catch {
@@ -96,6 +101,9 @@ function checkOne(targetUrl, record, timeoutMs) {
 
     const doRequest = (currentUrl) => {
       if (settled) return;
+
+      // Drop previous hop before opening the next (avoids stacked listeners).
+      destroyRequest();
 
       let url;
       try {
@@ -154,16 +162,11 @@ function checkOne(targetUrl, record, timeoutMs) {
         return;
       }
 
-      req.on('socket', (socket) => {
-        socket.setTimeout(timeoutMs);
-        socket.on('timeout', () => {
-          socket.destroy();
-          finish(false);
-        });
-      });
-
-      req.on('timeout', () => finish(false));
-      req.on('error', () => finish(false));
+      // Proxy agents may attach several internal 'socket' handlers per hop.
+      req.setMaxListeners(20);
+      // Hard timer already covers hangs. once() avoids stacking our own handlers.
+      req.once('timeout', () => finish(false));
+      req.once('error', () => finish(false));
       req.end();
     };
 
@@ -208,7 +211,7 @@ async function mapPool(items, concurrency, worker) {
  * @returns {Promise<{
  *   working: import('./types.js').ProxyRecord[],
  *   slug: string,
- *   stats: { total: number, working: number, files: number }
+ *   stats: { total: number, working: number, files: number, countries: number }
  * }>}
  */
 export async function checkProxies(options) {
@@ -269,6 +272,7 @@ export async function checkProxies(options) {
       total: records.length,
       working: working.length,
       files: writeStats.files,
+      countries: writeStats.countries,
     },
   };
 }

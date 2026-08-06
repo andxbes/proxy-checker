@@ -104,39 +104,36 @@ export async function writeProxyLists(proxiesDir, records) {
 }
 
 /**
- * Write working proxies under data/checked/{slug}/...
+ * Write working proxies under data/checked/{slug}/{CC}/{anonymity}-{protocol}.txt
  * @param {string} checkedDir
  * @param {string} slug
  * @param {import('./types.js').ProxyRecord[]} records
- * @returns {Promise<{ files: number, proxies: number }>}
+ * @returns {Promise<{ countries: number, files: number, proxies: number }>}
  */
 export async function writeCheckedLists(checkedDir, slug, records) {
   const base = path.join(checkedDir, slug);
-  await mkdir(base, { recursive: true });
-
   const grouped = groupByCountryAndFile(records);
-  /** @type {Map<string, Set<string>>} */
-  const mergedFiles = new Map();
-
-  for (const fileMap of grouped.values()) {
-    for (const [fileName, addresses] of fileMap) {
-      if (!mergedFiles.has(fileName)) mergedFiles.set(fileName, new Set());
-      const set = mergedFiles.get(fileName);
-      for (const addr of addresses) set.add(addr);
-    }
-  }
-
   let files = 0;
   let proxies = 0;
 
-  for (const [fileName, addresses] of mergedFiles) {
-    const sorted = [...addresses].sort();
-    await writeFile(path.join(base, fileName), `${sorted.join('\n')}\n`, 'utf8');
-    files += 1;
-    proxies += sorted.length;
+  for (const [country, fileMap] of grouped) {
+    const dir = path.join(base, country);
+    await mkdir(dir, { recursive: true });
+
+    for (const [fileName, addresses] of fileMap) {
+      const sorted = [...addresses].sort();
+      await writeFile(path.join(dir, fileName), `${sorted.join('\n')}\n`, 'utf8');
+      files += 1;
+      proxies += sorted.length;
+    }
   }
 
-  return { files, proxies };
+  // Ensure target folder exists even when nothing worked (empty result).
+  if (grouped.size === 0) {
+    await mkdir(base, { recursive: true });
+  }
+
+  return { countries: grouped.size, files, proxies };
 }
 
 /**

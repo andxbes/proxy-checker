@@ -6,7 +6,7 @@
 2. **Merge** — collector deduplicates (`protocol|host:port`), prefers `elite` on anonymity conflicts, optional `--country` filter.
 3. **Store** — write `data/proxies/{CC}/{anonymity}-{protocol}.txt` (never writes `data/custom/`).
 4. **Check** (optional) — load `data/proxies/` + `data/custom/` (or `--from` / `--input`), request target through each proxy (follow redirects up to 5 hops); keep only **final** status **200**.
-5. **Store checked** — write `data/checked/{url-slug}/{anonymity}-{protocol}.txt`.
+5. **Store checked** — write `data/checked/{url-slug}/{CC}/{anonymity}-{protocol}.txt`.
 
 ## Custom lists
 
