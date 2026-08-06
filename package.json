@@ -1,0 +1,22 @@
+{
+  "name": "proxy-checker",
+  "version": "1.0.0",
+  "description": "Collect anonymous/elite proxies from pluggable sources and check them against a target URL",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "proxy-checker": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js",
+    "collect": "node src/cli.js collect",
+    "check": "node src/cli.js check",
+    "run": "node src/cli.js run"
+  },
+  "dependencies": {
+    "https-proxy-agent": "^7.0.6",
+    "socks-proxy-agent": "^8.0.5"
+  }
+}
