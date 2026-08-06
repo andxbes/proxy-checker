@@ -129,3 +129,10 @@ See [docs/architecture.md](docs/architecture.md).
 
 - Node.js ≥ 18
 - Network access to proxy list URLs and (for `check`) to the target via proxies
+
+## Collect all proxy
+`npm start collect`
+## Check only one country
+`npm start --  check  --check https://google.com/  --country SK  --concurrency 20 --timeout 8000`
+## Check all country
+`npm start --  check  --check https://google.com/   --concurrency 20 --timeout 8000`
