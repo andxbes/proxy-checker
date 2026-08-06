@@ -69,3 +69,4 @@ Free public lists (spys.me) have a very low live rate; `0/N` against Google is c
 | `src/types.js` | Shared constants / helpers |
 | `src/parsers/registry.js` | Source registry |
 | `src/parsers/spysMe.js` | First source adapter |
+| `src/parsers/proxyFreeOnly.js` | proxyfreeonly.com API adapter |

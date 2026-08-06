@@ -1,10 +1,11 @@
 import { spysMeParser } from './spysMe.js';
+import { proxyFreeOnlyParser } from './proxyFreeOnly.js';
 
 /**
  * Register new source parsers here.
  * @type {import('./base.js').SourceParser[]}
  */
-export const parsers = [spysMeParser];
+export const parsers = [spysMeParser, proxyFreeOnlyParser];
 
 /**
  * @param {string[]} [sourceIds]
