@@ -28,9 +28,23 @@ export async function collectProxies(options) {
 
   for (const parser of parsers) {
     process.stderr.write(`Fetching source: ${parser.id}...\n`);
-    const batch = await parser.fetchAndParse(fetchOptions);
-    process.stderr.write(`  ${parser.id}: ${batch.length} proxies (ANM/HIA)\n`);
-    all.push(...batch);
+    try {
+      const batch = await parser.fetchAndParse(fetchOptions);
+      process.stderr.write(`  ${parser.id}: ${batch.length} proxies (ANM/HIA)\n`);
+      all.push(...batch);
+    } catch (err) {
+      const message = err?.cause?.message || err?.message || String(err);
+      process.stderr.write(
+        `  ${parser.id}: FAILED (${message}) — skipping, continue with other sources\n`,
+      );
+    }
+  }
+
+  if (all.length === 0) {
+    throw new Error(
+      'No proxies collected: every source failed or returned nothing. ' +
+        'Check network access and --source selection.',
+    );
   }
 
   const beforeDedupe = all.length;

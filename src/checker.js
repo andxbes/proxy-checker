@@ -185,7 +185,9 @@ function requestTarget(targetUrl, timeoutMs, options = {}) {
         return;
       }
 
-      req.setMaxListeners(20);
+      // HttpsProxyAgent / SocksProxyAgent attach many internal 'socket' listeners
+      // per CONNECT hop; default (and former 20) trips MaxListenersExceededWarning.
+      req.setMaxListeners(64);
       req.once('timeout', () => finish({ ok: false, status: 0, body: '' }));
       req.once('error', () => finish({ ok: false, status: 0, body: '' }));
       req.end();
