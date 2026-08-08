@@ -5,8 +5,48 @@
 1. **Collect** — each registered source parser fetches and normalizes proxies into `ProxyRecord[]`.
 2. **Merge** — collector deduplicates (`protocol|host:port`), prefers `elite` on anonymity conflicts, optional `--country` filter.
 3. **Store** — write `data/proxies/{CC}/{anonymity}-{protocol}.txt` (never writes `data/custom/`).
-4. **Check** (optional) — load `data/proxies/` + `data/custom/` (or `--from` / `--input`), request target through each proxy (follow redirects up to 5 hops); keep only **final** status **200**.
+4. **Check** (optional) — either:
+   - **Liveness** — request `--check` URL through each proxy; keep final HTTP **200**
+   - **Anonymity (judge)** — if `JUDGE_PUBLIC_URL` / `--judge` is set: start local judge → request public URL through each proxy → classify elite / anonymous / transparent → keep anonymous+elite (rewrite `anonymity` to the measured level)
 5. **Store checked** — write `data/checked/{url-slug}/{CC}/{anonymity}-{protocol}.txt`.
+
+## Judge anonymity mode
+
+```mermaid
+sequenceDiagram
+  participant CLI
+  participant Judge as LocalJudge
+  participant Proxy
+  participant Public as PublicURL
+
+  CLI->>Judge: listen JUDGE_PORT
+  CLI->>Public: direct GET (real IP)
+  CLI->>Proxy: GET JUDGE_PUBLIC_URL
+  Proxy->>Public: request
+  Public->>Judge: forwarded request
+  Judge-->>Proxy: JSON ip plus headers
+  Proxy-->>CLI: body
+  CLI->>CLI: classify
+  CLI->>Judge: close
+```
+
+Config via `.env` (see `.env.example`):
+
+| Variable | Role |
+|----------|------|
+| `JUDGE_PUBLIC_URL` | Public URL proxies hit (must reach `JUDGE_PORT`) |
+| `JUDGE_HOST` / `JUDGE_PORT` | Local bind while the scan runs |
+| `JUDGE_TRUST_PROXY` | `1` when tunnel/nginx adds `X-Forwarded-For` |
+| `JUDGE_REAL_IP` | Optional; else auto-detected via a direct GET to the public URL |
+
+Classification:
+
+- **transparent** — real IP appears in judge `ip` or headers
+- **anonymous** — real IP hidden, but proxy-sign headers remain (`Via`, `X-Forwarded-For`, …)
+- **elite** — real IP hidden and no proxy-sign headers
+- **dead** — timeout / non-200 / invalid JSON
+
+With `JUDGE_TRUST_PROXY=1`, hop headers from the tunnel are excluded from “proxy signs” so Cloudflare/ngrok do not force every proxy to look anonymous.
 
 ## Custom lists
 
@@ -50,7 +90,7 @@ Agents are created with `keepAlive: false`, sockets are destroyed after each att
 
 Progress lines (`progress: 30/518 completed`) are a **log interval** (every N finished checks). Parallelism is controlled only by `--concurrency`.
 
-Free public lists (spys.me) have a very low live rate; `0/N` against Google is common. Google may also return non-200 (captcha/blocks) even via a live proxy — prefer a neutral target like `https://httpbin.org/status/200` to validate the checker.
+Free public lists (spys.me) have a very low live rate; `0/N` against Google is common. Google may also return non-200 (captcha/blocks) even via a live proxy — prefer a neutral target like `https://httpbin.org/status/200` to validate the checker, or use judge mode against your own endpoint.
 
 ## Extensibility
 
@@ -64,7 +104,10 @@ Free public lists (spys.me) have a very low live rate; `0/N` against Google is c
 |------|------|
 | `src/cli.js` | Commands and flags |
 | `src/collector.js` | Run parsers → merge → write |
-| `src/checker.js` | Concurrent proxy checks |
+| `src/checker.js` | Concurrent proxy checks (liveness + judge) |
+| `src/env.js` | `.env` loader and judge config |
+| `src/judge/server.js` | Short-lived local judge HTTP server |
+| `src/judge/classify.js` | elite / anonymous / transparent classification |
 | `src/storage.js` | Paths, dedupe, read/write lists |
 | `src/types.js` | Shared constants / helpers |
 | `src/parsers/registry.js` | Source registry |

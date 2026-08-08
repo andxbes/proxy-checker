@@ -2,7 +2,9 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectProxies } from './collector.js';
-import { checkProxies } from './checker.js';
+import { checkProxies, resolveRealIp } from './checker.js';
+import { getJudgeConfig, loadEnv } from './env.js';
+import { startJudgeServer } from './judge/server.js';
 import { listSourceIds } from './parsers/registry.js';
 import { dataPaths } from './storage.js';
 
@@ -23,6 +25,7 @@ function parseArgs(argv) {
    *   command?: string,
    *   country?: string,
    *   check?: string,
+   *   judge?: string,
    *   timeout: number,
    *   concurrency: number,
    *   sources: string[],
@@ -62,6 +65,9 @@ function parseArgs(argv) {
       i += 1;
     } else if ((arg === '--check' || arg === '--target') && next) {
       opts.check = next;
+      i += 1;
+    } else if (arg === '--judge' && next) {
+      opts.judge = next;
       i += 1;
     } else if (arg === '--source' && next) {
       sources.push(next);
@@ -118,12 +124,21 @@ Usage:
   npm start -- collect [--country IT] [--source spys-me]
   npm start -- check --check https://example.com [--country IT] [--from custom]
   npm start -- check --check https://example.com --input ./my-list.txt --protocol http
+  npm start -- check [--judge URL] [--country IT]   # anonymity via local judge + .env
   npm start -- run --check https://example.com [--country IT]
+  npm start -- run [--country IT]                   # collect + judge if JUDGE_PUBLIC_URL set
 
 Commands:
   collect   Fetch proxies → data/proxies/ (does NOT touch data/custom/)
-  check     Test proxies against a target URL (keep HTTP 200 only)
+  check     Test proxies (liveness and/or anonymity)
   run       collect, then check
+
+Liveness vs anonymity:
+  --check URL     Liveness only: keep proxies that get final HTTP 200
+  --judge URL     Anonymity mode (overrides JUDGE_PUBLIC_URL from .env)
+  If JUDGE_PUBLIC_URL is set in .env (or --judge is passed), check/run starts a
+  local judge server for the scan, classifies elite/anonymous/transparent, and
+  keeps only anonymous+elite. Transparent proxies are discarded.
 
 Your own lists (never overwritten by collect):
   data/custom/{CC}/{anonymity}-{protocol}.txt
@@ -131,8 +146,9 @@ Your own lists (never overwritten by collect):
 
 Options:
   --country CC       ISO country code (e.g. IT). Omit = all countries.
-  --check URL        Target URL for checking (required for check/run)
+  --check URL        Target URL for liveness check
   --target URL       Alias for --check
+  --judge URL        Public judge URL (anonymity mode; overrides .env)
   --from SOURCE      Check lists from: all (default) | proxies | custom
   --input PATH       Extra file or directory to check (repeatable)
   --protocol TYPE    For plain --input files: http|https|socks4|socks5 (default http)
@@ -141,6 +157,12 @@ Options:
   --timeout MS       Hard per-proxy deadline (default: 10000)
   --concurrency N    Parallel checks (default: 50)
   -h, --help         Show this help
+
+.env (see .env.example):
+  JUDGE_PUBLIC_URL   Public URL pointing at this machine's JUDGE_PORT
+  JUDGE_HOST/PORT    Local bind (default 0.0.0.0:8787)
+  JUDGE_TRUST_PROXY  1 when using ngrok/Cloudflare/nginx in front
+  JUDGE_REAL_IP      Optional; auto-detected via direct GET to public URL
 
 Registered sources: ${sources}
 
@@ -151,7 +173,109 @@ Layout:
 `);
 }
 
+/**
+ * @param {ReturnType<typeof parseArgs>} opts
+ */
+async function runCheck(opts) {
+  const { checkedDir } = dataPaths(projectRoot);
+  const judgeConfig = getJudgeConfig({ publicUrl: opts.judge });
+  const judgeMode = Boolean(judgeConfig.publicUrl);
+
+  if (!judgeMode && !opts.check) {
+    throw new Error(
+      'check/run require --check <url>, or set JUDGE_PUBLIC_URL in .env / pass --judge <url>',
+    );
+  }
+
+  if (judgeMode && opts.check && !opts.judge) {
+    process.stderr.write(
+      'Judge mode active (JUDGE_PUBLIC_URL / --judge); ' +
+        `--check ${opts.check} ignored for the scan target.\n`,
+    );
+  }
+
+  if (!judgeMode) {
+    const { stats, slug } = await checkProxies({
+      projectRoot,
+      targetUrl: /** @type {string} */ (opts.check),
+      country: opts.country,
+      timeout: opts.timeout,
+      concurrency: opts.concurrency,
+      from: opts.from,
+      inputs: opts.inputs,
+      anonymity: opts.anonymity,
+      protocol: opts.protocol,
+      judgeMode: false,
+    });
+
+    console.log(
+      `Working proxies: ${stats.working}/${stats.total} → ${stats.files} files ` +
+        `across ${stats.countries} countries`,
+    );
+    console.log(`  → ${path.join(checkedDir, slug)}`);
+    return;
+  }
+
+  if (!judgeConfig.publicUrl) {
+    throw new Error(
+      'Judge mode needs a public URL. Set JUDGE_PUBLIC_URL in .env ' +
+        '(tunnel/VPS/port-forward to JUDGE_PORT) or pass --judge <url>.',
+    );
+  }
+
+  /** @type {Awaited<ReturnType<typeof startJudgeServer>> | undefined} */
+  let server;
+  try {
+    server = await startJudgeServer({
+      host: judgeConfig.host,
+      port: judgeConfig.port,
+      path: judgeConfig.path,
+      trustProxy: judgeConfig.trustProxy,
+    });
+
+    const realIp = await resolveRealIp(
+      judgeConfig.publicUrl,
+      judgeConfig.realIp,
+      Math.min(opts.timeout, 15_000),
+    );
+    process.stderr.write(`Using real IP for anonymity checks: ${realIp}\n`);
+
+    const { stats, slug } = await checkProxies({
+      projectRoot,
+      targetUrl: judgeConfig.publicUrl,
+      country: opts.country,
+      timeout: opts.timeout,
+      concurrency: opts.concurrency,
+      from: opts.from,
+      inputs: opts.inputs,
+      anonymity: opts.anonymity,
+      protocol: opts.protocol,
+      judgeMode: true,
+      realIp,
+    });
+
+    console.log(
+      `Working proxies: ${stats.working}/${stats.total} ` +
+        `(elite=${stats.elite}, anonymous=${stats.anonymous}, ` +
+        `transparent=${stats.transparent}, dead=${stats.dead}) → ` +
+        `${stats.files} files across ${stats.countries} countries`,
+    );
+    console.log(`  → ${path.join(checkedDir, slug)}`);
+  } finally {
+    if (server) {
+      try {
+        await server.close();
+        process.stderr.write('Judge server stopped.\n');
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 async function main() {
+  await loadEnv(projectRoot);
+
   let opts;
   try {
     opts = parseArgs(process.argv);
@@ -166,7 +290,7 @@ async function main() {
     return;
   }
 
-  const { proxiesDir, customDir, checkedDir } = dataPaths(projectRoot);
+  const { proxiesDir, customDir } = dataPaths(projectRoot);
 
   try {
     if (opts.command === 'collect' || opts.command === 'run') {
@@ -185,27 +309,7 @@ async function main() {
     }
 
     if (opts.command === 'check' || opts.command === 'run') {
-      if (!opts.check) {
-        throw new Error('check/run require --check <url>');
-      }
-
-      const { stats, slug } = await checkProxies({
-        projectRoot,
-        targetUrl: opts.check,
-        country: opts.country,
-        timeout: opts.timeout,
-        concurrency: opts.concurrency,
-        from: opts.from,
-        inputs: opts.inputs,
-        anonymity: opts.anonymity,
-        protocol: opts.protocol,
-      });
-
-      console.log(
-        `Working proxies: ${stats.working}/${stats.total} → ${stats.files} files ` +
-          `across ${stats.countries} countries`,
-      );
-      console.log(`  → ${path.join(checkedDir, slug)}`);
+      await runCheck(opts);
     }
   } catch (err) {
     console.error(err.message || err);

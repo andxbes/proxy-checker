@@ -20,12 +20,44 @@ npm start -- collect --country IT
 # Collect from a specific source
 npm start -- collect --source spys-me
 
-# Check previously collected proxies against a URL
+# Check previously collected proxies against a URL (liveness only)
 npm start -- check --check https://example.com --country IT
+
+# Anonymity check via local judge (needs public URL in .env — see below)
+npm start -- check --country IT
 
 # Collect + check in one run
 npm start -- run --check https://httpbin.org/status/200 --country IT --concurrency 30 --timeout 8000
 ```
+
+## Anonymity check (local judge)
+
+`--check` only verifies that a proxy returns HTTP **200**. To also verify **anonymity**, the CLI can start a short-lived **judge** server for the duration of `check` / `run`.
+
+1. Copy [`.env.example`](.env.example) → `.env`
+2. Uncomment and set `JUDGE_PUBLIC_URL` to a **public** URL that reaches your machine’s `JUDGE_PORT` (VPS reverse-proxy, Cloudflare Tunnel, ngrok, or port-forward)
+3. If a tunnel/nginx sits in front, set `JUDGE_TRUST_PROXY=1`
+4. Optionally set `JUDGE_REAL_IP` (otherwise it is detected via a direct GET to the public URL)
+
+```bash
+cp .env.example .env
+# uncomment and edit JUDGE_PUBLIC_URL=https://your-tunnel.example/judge
+
+npm start -- check --country IT
+# or override URL for one run:
+npm start -- check --judge https://your-tunnel.example/judge --country IT
+```
+
+Classification:
+
+| Verdict | Meaning | Kept? |
+|---------|---------|-------|
+| **elite** | Real IP hidden, no proxy-revealing headers | Yes |
+| **anonymous** | Real IP hidden, but proxy headers present | Yes |
+| **transparent** | Real IP visible in IP/headers | No |
+| **dead** | Timeout / non-200 / bad body | No |
+
+The local server binds only while the scan runs, then shuts down. Without a reachable public URL, anonymity mode cannot work (proxies on the internet cannot dial `localhost`).
 
 ## Your own proxy lists
 
@@ -53,7 +85,7 @@ See [data/custom/README.md](data/custom/README.md).
 | Command | Description |
 |---------|-------------|
 | `collect` | Fetch proxies and write lists under `data/proxies/` |
-| `check` | Load lists and keep proxies that get HTTP **200** for `--check` URL |
+| `check` | Liveness (`--check`) and/or anonymity (`JUDGE_PUBLIC_URL` / `--judge`) |
 | `run` | `collect` then `check` |
 
 ### Options
@@ -61,7 +93,8 @@ See [data/custom/README.md](data/custom/README.md).
 | Option | Description |
 |--------|-------------|
 | `--country CC` | ISO 3166-1 alpha-2 (e.g. `IT`). Omit = all countries |
-| `--check URL` / `--target URL` | Target URL for checking (required for `check` / `run`) |
+| `--check URL` / `--target URL` | Liveness target (final HTTP 200). Not required when judge mode is on |
+| `--judge URL` | Public judge URL; enables anonymity mode (overrides `JUDGE_PUBLIC_URL`) |
 | `--source ID` | Parser id (repeatable). Default = all registered sources |
 | `--timeout MS` | Hard per-proxy deadline in ms (default `10000`). Dead proxies are cut off; total time ≈ batches × timeout, not N × timeout |
 | `--from SOURCE` | `all` (default) \| `proxies` \| `custom` — which built-in dirs to load for check |
@@ -95,7 +128,7 @@ data/proxies/IT/elite-socks5.txt
 
 Each file: one `ip:port` per line.
 
-Checked (only HTTP 200):
+Checked (liveness: HTTP 200; judge mode: anonymous + elite only, with measured anonymity):
 
 ```
 data/checked/{url-slug}/{CC}/{anonymity}-{protocol}.txt
@@ -133,6 +166,7 @@ See [docs/architecture.md](docs/architecture.md).
 
 - Node.js ≥ 18
 - Network access to proxy list URLs and (for `check`) to the target via proxies
+- For anonymity mode: a **public** URL (tunnel/VPS/port-forward) that reaches the local judge port
 
 ## Collect all proxy
 `npm start collect`
@@ -140,3 +174,5 @@ See [docs/architecture.md](docs/architecture.md).
 `npm start --  check  --check https://google.com/  --country SK  --concurrency 20 --timeout 8000`
 ## Check all country
 `npm start --  check  --check https://google.com/   --concurrency 20 --timeout 8000`
+## Anonymity check (requires .env JUDGE_PUBLIC_URL)
+`npm start -- check --country SK --concurrency 20 --timeout 8000`

@@ -6,3 +6,4 @@ data/custom/**
 !data/custom/.gitkeep
 *.log
 .DS_Store
+.env
