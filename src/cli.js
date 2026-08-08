@@ -177,7 +177,8 @@ async function main() {
       });
       console.log(
         `Collected ${stats.proxies} proxies into ${stats.files} files ` +
-          `across ${stats.countries} countries (${stats.sources.join(', ')})`,
+          `across ${stats.countries} countries (${stats.sources.join(', ')})` +
+          (stats.duplicates ? `; removed ${stats.duplicates} duplicate(s)` : ''),
       );
       console.log(`  → ${proxiesDir}`);
       console.log(`  (your lists stay in ${customDir})`);

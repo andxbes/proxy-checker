@@ -53,6 +53,39 @@ Item fields used:
 | `anonymityLevel` | `elite` / `elite (HIA)` → elite; `anonymous` → anonymous; `transparent*` dropped |
 | `protocols[]` | each of `http` / `https` / `socks4` / `socks5` → separate `ProxyRecord` |
 
+### `geonix`
+
+Free list API from [free.geonix.com](https://free.geonix.com/) (no browser session when captcha is off):
+
+| Endpoint | Role |
+|----------|------|
+| `GET /api/front/main/captcha/info` | Fail fast if captcha is required |
+| `POST /api/front/main/proxy/export` | Plain `ip:port` array for a `proxyTypes` filter |
+| `POST /api/front/main/pagination/filtration` | Paginated metadata (`content`, `totalElements`); ports are image URLs only |
+
+Request body for filtration (page is **0-based**):
+
+```json
+{
+  "page": 0,
+  "size": 100,
+  "countries": [],
+  "proxyProtocols": [],
+  "proxyTypes": ["ANONYMOUS"]
+}
+```
+
+The parser fetches **ANONYMOUS** and **ELITE** separately. Export and filtration share the same list order, so ports are joined by index + matching IP. Transparent (`pr-proz.txt`) is dropped.
+
+| Field | Mapping |
+|-------|---------|
+| export `ip:port` | host / port |
+| `country` (English name) | ISO2 via built-in name map |
+| `anonymity` | `an-anonim.txt` → anonymous; `el-elit.txt` → elite |
+| `proxyType` | `HTTP` / `HTTPS` / `SOCKS4` / `SOCKS5` |
+
+If `isCaptchaActive` is true, collect fails with a clear error (ports are not exposed without a solved captcha).
+
 ## How to add a new source
 
 1. Create `src/parsers/mySource.js` exporting a parser object:
@@ -76,7 +109,7 @@ export default mySourceParser;
 
 ```js
 import { mySourceParser } from './mySource.js';
-export const parsers = [spysMeParser, proxyFreeOnlyParser, mySourceParser];
+export const parsers = [spysMeParser, proxyFreeOnlyParser, geonixParser, mySourceParser];
 ```
 
 3. Document the source format and URLs in this file.
@@ -84,6 +117,7 @@ export const parsers = [spysMeParser, proxyFreeOnlyParser, mySourceParser];
 4. Use it:
 
 ```bash
+npm start -- collect --source geonix
 npm start -- collect --source proxyfreeonly
 # or all sources:
 npm start -- collect

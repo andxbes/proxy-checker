@@ -8,7 +8,13 @@ import { dataPaths, dedupeRecords, writeProxyLists } from './storage.js';
  * @param {string[]} [options.sources]
  * @returns {Promise<{
  *   records: import('./types.js').ProxyRecord[],
- *   stats: { countries: number, files: number, proxies: number, sources: string[] }
+ *   stats: {
+ *     countries: number,
+ *     files: number,
+ *     proxies: number,
+ *     duplicates: number,
+ *     sources: string[],
+ *   }
  * }>}
  */
 export async function collectProxies(options) {
@@ -27,7 +33,15 @@ export async function collectProxies(options) {
     all.push(...batch);
   }
 
+  const beforeDedupe = all.length;
   let records = dedupeRecords(all);
+  const duplicates = beforeDedupe - records.length;
+  if (duplicates > 0) {
+    process.stderr.write(
+      `Deduped ${duplicates} duplicate(s) (${beforeDedupe} → ${records.length}) ` +
+        `by protocol|host:port — skips extra check requests\n`,
+    );
+  }
 
   if (options.country) {
     const cc = options.country.toUpperCase();
@@ -41,6 +55,7 @@ export async function collectProxies(options) {
     records,
     stats: {
       ...stats,
+      duplicates,
       sources: parsers.map((p) => p.id),
     },
   };

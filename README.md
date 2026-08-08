@@ -111,12 +111,16 @@ Example path: `data/checked/https_example_com/IT/elite-http.txt`.
   - https://spys.me/socks.txt (SOCKS5)
 - **proxyfreeonly** — JSON API:
   - https://proxyfreeonly.com/api/free-proxy-list?...
+- **geonix** — free.geonix.com JSON API (`export` + `filtration`; works without browser while captcha is off)
 
 Only anonymity codes **anonymous** / **elite** (and spys A/H) are kept. Transparent / NOA is dropped.
 
+Collector dedupes by `protocol|host:port` across sources before writing lists (and check dedupes again on load), so duplicate entries do not trigger extra check requests.
+
 ```bash
+npm start -- collect --source geonix
 npm start -- collect --source proxyfreeonly
-npm start -- collect --source spys-me --source proxyfreeonly
+npm start -- collect --source spys-me --source proxyfreeonly --source geonix
 ```
 
 See [docs/sources.md](docs/sources.md) for formats and how to add another source.

@@ -352,5 +352,13 @@ export async function loadProxiesForCheck(options) {
     );
   }
 
-  return dedupeRecords(all);
+  const before = all.length;
+  const records = dedupeRecords(all);
+  const duplicates = before - records.length;
+  if (duplicates > 0) {
+    process.stderr.write(
+      `Deduped ${duplicates} duplicate(s) before check (${before} → ${records.length})\n`,
+    );
+  }
+  return records;
 }

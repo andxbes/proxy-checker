@@ -70,3 +70,4 @@ Free public lists (spys.me) have a very low live rate; `0/N` against Google is c
 | `src/parsers/registry.js` | Source registry |
 | `src/parsers/spysMe.js` | First source adapter |
 | `src/parsers/proxyFreeOnly.js` | proxyfreeonly.com API adapter |
+| `src/parsers/geonix.js` | free.geonix.com API adapter |
