@@ -2,7 +2,10 @@ import http from 'node:http';
 import https from 'node:https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';
-import { classifyJudgePayload } from './judge/classify.js';
+import {
+  classifyJudgePayload,
+  formatJudgeFindingsLine,
+} from './judge/classify.js';
 import {
   dataPaths,
   loadProxiesForCheck,
@@ -258,27 +261,30 @@ export async function resolveRealIp(publicUrl, configuredIp, timeoutMs) {
  * @param {import('./types.js').ProxyRecord} record
  * @param {string} realIp
  * @param {number} timeoutMs
- * @returns {Promise<import('./judge/classify.js').JudgeVerdict>}
+ * @returns {Promise<import('./judge/classify.js').JudgeResult>}
  */
 async function judgeOne(judgeUrl, record, realIp, timeoutMs) {
+  /** @type {import('./judge/classify.js').JudgeResult} */
+  const dead = { verdict: 'dead', findings: [] };
+
   let agent;
   try {
     agent = createProxyAgent(record, timeoutMs);
   } catch {
-    return 'dead';
+    return dead;
   }
 
   const result = await requestTarget(judgeUrl, timeoutMs, {
     agent,
     readBody: true,
   });
-  if (!result.ok || !result.body) return 'dead';
+  if (!result.ok || !result.body) return dead;
 
   let payload;
   try {
     payload = JSON.parse(result.body);
   } catch {
-    return 'dead';
+    return dead;
   }
 
   return classifyJudgePayload(payload, realIp);
@@ -381,7 +387,7 @@ export async function checkProxies(options) {
     );
 
     await mapPool(records, concurrency, async (record) => {
-      const verdict = await judgeOne(
+      const judged = await judgeOne(
         options.targetUrl,
         record,
         realIp,
@@ -389,13 +395,19 @@ export async function checkProxies(options) {
       );
       done += 1;
 
-      if (verdict === 'elite') {
+      const label = `${record.host}:${record.port}`;
+      const findingLine = formatJudgeFindingsLine(label, judged);
+      if (findingLine) {
+        process.stderr.write(`${findingLine}\n`);
+      }
+
+      if (judged.verdict === 'elite') {
         elite += 1;
         working.push({ ...record, anonymity: 'elite' });
-      } else if (verdict === 'anonymous') {
+      } else if (judged.verdict === 'anonymous') {
         anonymous += 1;
         working.push({ ...record, anonymity: 'anonymous' });
-      } else if (verdict === 'transparent') {
+      } else if (judged.verdict === 'transparent') {
         transparent += 1;
       } else {
         dead += 1;

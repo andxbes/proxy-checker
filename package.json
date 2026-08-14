@@ -16,7 +16,7 @@
     "run": "node src/cli.js run"
   },
   "dependencies": {
-    "https-proxy-agent": "^7.0.6",
-    "socks-proxy-agent": "^8.0.5"
+    "https-proxy-agent": "^9.0.0",
+    "socks-proxy-agent": "^10.1.0"
   }
 }

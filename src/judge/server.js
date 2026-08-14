@@ -151,7 +151,7 @@ export function startJudgeServer(options) {
       const localUrl = `http://127.0.0.1:${port}${pathname}`;
       process.stderr.write(
         `Judge server listening on ${host}:${port}${pathname}` +
-          ` (trustProxy=${trustProxy})\n`,
+        ` (trustProxy=${trustProxy})\n`,
       );
       resolve({
         host,
